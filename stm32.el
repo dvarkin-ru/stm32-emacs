@@ -66,28 +66,20 @@
 
 (require 'gdb-mi)
 (require 'gud)
-(require 'friendly-shell-command)
 (require 'projectile)
 (require 'helm)
-(require 's)
-
 
 
 (defun stm32--select-file (root filter)
   "Select file using helm in ROOT directory and find by FILTER."
-  (let* ((out (s-split
-               "\n"
-               (friendly-shell-command-to-string
-                (s-concat "find . -type f -name '" filter "'")
-                :path root)))
-         (files (delete "" out)))
+  (let ((files (directory-files-recursively root filter)))
     (if (> (length files) 0)
         (helm :sources (helm-build-sync-source (concat "Select " filter)
                          :candidates files
                          :fuzzy-match t)
               :buffer "*helm find stm32*"
               :case-fold-search helm-file-name-case-fold-search)
-      (user-error "No matching files"))))
+      (user-error "No matching files %s in %s" filter root))))
 
 (defun stm32--close-process-buffer (process signal)
   "Close process buffer when PROCESS sends exit SIGNAL."
@@ -125,8 +117,8 @@
   (let ((root (projectile-project-root))
         (buffer-name "*stm32-gdb-server*"))
     (when 'root
-      (let* ((file (stm32--select-file root "*.cfg"))
-             (cmd (concat stm32-openocd-command " -f " (concat root file)))
+      (let* ((file (stm32--select-file root "\.cfg$"))
+             (cmd (concat stm32-openocd-command " -f " file))
              (output-buffer (generate-new-buffer buffer-name)))
         (when file
           (async-shell-command cmd
@@ -145,10 +137,10 @@
          (server-started (when (not p)
                            (stm32-start-gdb-server))))
     (when (and 'root 'server-started)
-      (let ((file (stm32--select-file root "*.elf")))
+      (let ((file (stm32--select-file root "\.elf$")))
         (when file
           (save-window-excursion
-            (gdb (s-concat stm32-gdb-command " " (concat root file)))))))))
+            (gdb (concat stm32-gdb-command " " file))))))))
 
 (defun stm32-flash-to-mcu ()
   "Upload compiled binary to stm32 through gdb if gdb has been started."
@@ -192,9 +184,9 @@
   (save-window-excursion
     (let ((root (projectile-project-root)))
       (if root
-          (let ((file (stm32--select-file root "*.ioc")))
+          (let ((file (stm32--select-file root "\.ioc$")))
             (if file
-                (stm32--start-cubemx (concat root file))
+                (stm32--start-cubemx file)
               (stm32--start-cubemx)))
         (stm32--start-cubemx)))))
 
